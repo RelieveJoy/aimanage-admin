@@ -96,10 +96,14 @@ public class AuditAspect {
         logEntry.setOperatorId(operator.getUserId());
         // 角色取操作当时的快照 —— 用户之后改角色，历史记录不应跟着变
         logEntry.setOperatorRole(operator.getRole());
-        logEntry.setProjectId(argAt(args, auditable.projectIdArg()));
+        // 项目 ID 与目标 ID 都优先取业务方法指定的，取不到再退回参数列表。
+        // 业务方法需要指定，通常是因为那个值来自查库结果而非入参
+        // （新增时 ID 才生成、审批时项目 ID 在申请记录里）。
+        Long projectId = AuditContext.projectId();
+        logEntry.setProjectId(projectId != null ? projectId : argAt(args, auditable.projectIdArg()));
+
         logEntry.setTargetType(auditable.type());
 
-        // 目标 ID 优先取业务方法指定的（新增场景本次才生成），否则从参数里取
         Long targetId = AuditContext.targetId();
         logEntry.setTargetId(targetId != null ? targetId : argAt(args, auditable.targetIdArg()));
         logEntry.setTargetName(targetName);

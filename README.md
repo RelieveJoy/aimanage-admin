@@ -193,6 +193,7 @@ curl http://localhost:8080/api/admin/users -H "Authorization: Bearer <member-tok
 | AD4 | 项目管理（建项目 / 指定 PM / 归档） | ✅ 后端 + 前端 |
 | AD5 | 项目成员与成员变化 | ✅ 后端 + 前端 |
 | AD6 | 全局审计账本检索 | ✅ 后端 + 前端 |
+| AD8 | 加人申请审批 + 通知中心 | ✅ 后端 + 前端 |
 | — | 审计 AOP 切面（方案 A2 写入侧） | ✅ |
 | — | Docker 一键部署 | ✅ |
 | — | 概览页（统计 + 进度） | ✅ |
@@ -201,8 +202,9 @@ curl http://localhost:8080/api/admin/users -H "Authorization: Bearer <member-tok
 
 | 编号 | 功能 | 阻塞原因 |
 |---|---|---|
-| AD7 | 只读观测（看板 / 甘特） | 依赖业务端提供支持 `readonly` 的组件 |
-| AD8 | 加人申请审批 + 通知中心 | 依赖 PM 端提供「申请加人」入口 |
+| AD7 | 只读观测（看板 / 甘特） | 依赖业务端提供只读数据接口 |
+
+> AD8 的**提交侧**（`POST /api/requests`）已代为实现，PM 前端只需加一个按钮调用它。
 
 **侧边菜单里灰色的项就是这些未完成的故事** —— 有意摆出来，让功能边界可见。
 
@@ -235,13 +237,34 @@ public void updateStatus(Long taskId, String newStatus) {
 
 ---
 
+## 审批流（AD8）
+
+```
+PM 点「申请加人」
+      │  POST /api/requests
+      ▼
+  join_request 表（PENDING）
+      │  + 通知所有管理员
+      ▼
+管理员在「审批与通知」页看到角标
+      │
+      ├── 批准 → 写 project_member + 写审计 + 通知申请人
+      └── 拒绝 → 写审计 + 通知申请人（必须填理由）
+```
+
+**为什么不让 PM 直接加人**：这样"组织架构 + 项目成员"完全归属管理员，
+与需求方要的"明确每个项目的 PM 和成员是谁"一致。
+
+---
+
 ## 已知依赖（需要和其他端对齐）
 
 | # | 依赖 | 说明 |
 |---|---|---|
 | 1 | **业务端写方法接入 `@Auditable`** | 切面已就位，但业务端的 Service 方法需要加注解才会进账本 |
-| 2 | 只读观测 | 业务端看板/甘特组件需支持 `readonly` 模式 |
-| 3 | 加人申请 | PM 端需提供「申请加人」入口 |
+| 2 | 只读观测 | 业务端需提供 `GET /api/projects/{id}/kanban` 和 `/gantt` 数据接口 |
+
+详见 `docs/admin/给业务端的对接说明.md`。
 
 ---
 

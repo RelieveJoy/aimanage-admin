@@ -338,15 +338,79 @@ Admin 端**不新增接口**，复用业务端既有 GET：
 
 ---
 
-## 8. 申请审批与通知（Sprint 3）— 草案
+## 8. 申请审批与通知（Sprint 3 · Must）✅ 已实现
+
+### 8.1 提交侧（PM 端调用）
+
+本期唯一的申请类型是「加人申请」—— 方案 B 的取舍：先把一条完整链路打通，
+而**不是**铺开做多事件源矩阵。
+
+```
+POST /api/requests
+{ "projectId": 3, "targetUserId": 2, "reason": "测试组需要人，请批准" }
+```
+
+**只有本项目的 PM 能提交**（`applicantId` 从 UserContext 取，不接受前端传）。
+
+**异常**
+| 场景 | code | msg |
+|---|---|---|
+| 项目不存在 | `404` | "项目不存在" |
+| 项目已归档 | `400` | "项目已归档，无法加人" |
+| 提交人不是本项目 PM | `403` | "只有本项目的项目经理可以提交加人申请" |
+| 目标用户不存在 | `404` | "用户不存在" |
+| 目标用户已停用 | `400` | "该账号已停用，无法加入项目" |
+| 目标用户已在项目中 | `409` | "该用户已在项目中" |
+| 已有待审批的同类申请 | `409` | "已有一条待审批的申请，请等待管理员处理" |
+
+提交成功后会**通知所有启用中的管理员**（写入 `notification` 表）。
+
+### 8.2 审批侧（管理端）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/admin/requests` | 待审批列表；`?status=PENDING` |
-| POST | `/api/admin/requests/{id}/approve` | `{comment}` → 写入 `project_member` + 写审计 |
+| GET | `/api/admin/requests` | `?status=PENDING`，待审批排最前 |
+| GET | `/api/admin/requests/pending-count` | 待审批数，用于菜单角标 |
+| POST | `/api/admin/requests/{id}/approve` | `{comment}` 可选 |
 | POST | `/api/admin/requests/{id}/reject` | `{comment}` **必填** |
-| GET | `/api/admin/notifications` | `?unread=true`，**仅返回 receiver_id = 当前管理员** |
+
+**批准会做的事**（一个事务内）：
+1. 校验项目 / 目标用户仍然有效、且尚未在项目中
+2. 写入 `project_member`（若目标正是本项目 PM 则给 `PM` 角色）
+3. 更新申请状态 + 审批人 + 意见 + 时间
+4. **写一条审计记录**（`target_type = PROJECT_MEMBER`）
+5. 通知申请人
+
+**拒绝**只更新状态、写审计、通知申请人，**不动 `project_member`**。
+
+**异常**
+| 场景 | code | msg |
+|---|---|---|
+| 申请不存在 | `404` | "申请不存在" |
+| 申请已处理过 | `409` | "该申请已处理过了" |
+| 拒绝时未填理由 | `400` | "拒绝时必须填写理由" |
+| 目标用户已停用 / 已在项目中 | `409` | 相应提示 |
+
+> 列表响应中带 `targetAlreadyInProject` —— 让管理员**审批前**就看到
+> "这人已经在了"，而不是批了才发现。
+
+### 8.3 通知中心
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/admin/notifications` | `?unread=true`，**只返回发给当前登录用户的** |
+| GET | `/api/admin/notifications/unread-count` | 未读数 |
 | POST | `/api/admin/notifications/{id}/read` | 标记已读 |
 | POST | `/api/admin/notifications/read-all` | 全部已读 |
 
-> **跨端依赖**：`POST /api/requests`（PM 提交加人申请）由 PM 端实现，Admin 端只消费。
+**标记已读时会校验归属** —— 只能标记自己的通知，否则返回 `403`。
+
+通知类型：
+
+| type | 收件人 | 触发时机 |
+|---|---|---|
+| `JOIN_REQUEST` | 所有启用中的管理员 | PM 提交加人申请 |
+| `REQUEST_APPROVED` | 申请人 | 管理员批准 |
+| `REQUEST_REJECTED` | 申请人 | 管理员拒绝 |
+
+> 通知发送用 try/catch 包住 —— **发不出去不应让业务失败**，与审计切面同一条铁律。

@@ -22,6 +22,7 @@ public class AuditLog {
     public static final String TARGET_PROJECT_MEMBER = "PROJECT_MEMBER";
     public static final String TARGET_USER = "USER";
     public static final String TARGET_DEPARTMENT = "DEPARTMENT";
+    public static final String TARGET_JOIN_REQUEST = "JOIN_REQUEST";
 
     /** 动作 */
     public static final String ACTION_CREATE = "CREATE";

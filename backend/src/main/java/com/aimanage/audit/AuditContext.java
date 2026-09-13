@@ -26,6 +26,7 @@ public final class AuditContext {
     private static final ThreadLocal<State> HOLDER = ThreadLocal.withInitial(State::new);
 
     private static final class State {
+        Long projectId;
         Long targetId;
         String targetName;
         String remark;
@@ -38,6 +39,14 @@ public final class AuditContext {
     /** 记录一次字段变更 */
     public static void change(String field, Object before, Object after) {
         HOLDER.get().changes.add(new Change(field, str(before), str(after)));
+    }
+
+    /**
+     * 指定所属项目。当 projectId 不在方法参数里时使用，
+     * 例如审批场景：项目 ID 来自申请记录，参数列表里只有申请 ID。
+     */
+    public static void projectId(Long id) {
+        HOLDER.get().projectId = id;
     }
 
     /**
@@ -59,6 +68,10 @@ public final class AuditContext {
     }
 
     // ---------------- 供 AuditAspect 读取 ----------------
+
+    static Long projectId() {
+        return HOLDER.get().projectId;
+    }
 
     static Long targetId() {
         return HOLDER.get().targetId;

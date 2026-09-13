@@ -22,6 +22,14 @@
         >
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.title }}</span>
+
+          <!-- 待审批数量角标：有新申请时一眼能看到，不用点进去 -->
+          <el-badge
+            v-if="item.name === 'requests' && pendingCount > 0"
+            :value="pendingCount"
+            class="menu-badge"
+          />
+
           <el-tag
             v-if="item.disabled"
             size="small"
@@ -68,7 +76,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -82,10 +90,27 @@ import {
   Bell,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { fetchPendingCount } from '@/api/admin-request'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+/** 待审批的加人申请数，显示在菜单角标上 */
+const pendingCount = ref(0)
+
+async function loadPendingCount() {
+  try {
+    const data = await fetchPendingCount()
+    pendingCount.value = data.count
+  } catch {
+    // 角标失败不值得打扰用户，静默处理
+  }
+}
+
+// 每次切页面刷新角标 —— 管理员刚处理完，角标要跟着掉
+watch(() => route.path, loadPendingCount)
+onMounted(loadPendingCount)
 
 /**
  * 菜单按 Epic AD 的故事编号排列。
@@ -99,7 +124,7 @@ const menus = [
   { name: 'projects', path: '/projects', title: '项目管理', icon: Folder, disabled: false },
   { name: 'audit', path: '/audit', title: '审计账本', icon: Document, disabled: false },
   { name: 'observe', path: '/observe', title: '只读观测', icon: View, disabled: true },
-  { name: 'notifications', path: '/notifications', title: '审批与通知', icon: Bell, disabled: true },
+  { name: 'requests', path: '/requests', title: '审批与通知', icon: Bell, disabled: false },
 ]
 
 const activeMenu = computed(() => route.path)
@@ -164,6 +189,15 @@ async function onCommand(command) {
 .soon-tag {
   margin-left: auto;
   transform: scale(0.85);
+}
+
+.menu-badge {
+  margin-left: auto;
+  margin-right: 6px;
+}
+
+.menu-badge :deep(.el-badge__content) {
+  border: none;
 }
 
 .header {

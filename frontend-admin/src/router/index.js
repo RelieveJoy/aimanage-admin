@@ -49,6 +49,12 @@ const routes = [
         component: () => import('@/views/Audit.vue'),
         meta: { title: '审计账本' },
       },
+      {
+        path: 'requests',
+        name: 'requests',
+        component: () => import('@/views/Requests.vue'),
+        meta: { title: '审批与通知' },
+      },
     ],
   },
   {
