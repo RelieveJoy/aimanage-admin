@@ -1,0 +1,84 @@
+# ============================================================
+#  爱管理 · 一键启动（MySQL + 后端）
+#
+#    docker compose up -d --build     启动
+#    docker compose logs -f backend   看后端日志
+#    docker compose down              停止（保留数据）
+#    docker compose down -v           停止并清空数据（重置数据库）
+#
+#  数据库密码可用环境变量覆盖：DB_PASSWORD=xxx docker compose up -d
+# ============================================================
+
+# 必须显式指定项目名：本目录名是中文（"软件项目管理"），
+# Compose 无法从目录名推导出合法的项目名，会报 "project name must not be empty"
+name: aimanage
+
+services:
+
+  # ----------------------------------------------------------
+  # MySQL 8.0
+  # ----------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: aimanage-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-123456}
+      MYSQL_DATABASE: aimanage
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    ports:
+      # 用 3307 而非 3306：宿主机上已有本机 MySQL 占用 3306，
+      # 直接映射会冲突导致端口发布失败。
+      # 用 Navicat / DataGrip 连容器数据库时填 127.0.0.1:3307。
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # schema.sql 只在数据卷为空的首次启动时执行一次
+      - ./backend/src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_PASSWORD:-123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ----------------------------------------------------------
+  # 后端（三端共用）
+  # ----------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+    container_name: aimanage-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: aimanage
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-123456}
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+
+  # ----------------------------------------------------------
+  # 管理端前端（nginx 托管静态产物 + 反代 /api 到 backend）
+  # 宿主机端口用 8081 而非 5173，避免和 vite 开发服务器撞车
+  # ----------------------------------------------------------
+  frontend-admin:
+    build:
+      context: ./frontend-admin
+    container_name: aimanage-admin
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
+volumes:
+  mysql-data:

@@ -1,0 +1,52 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: aimanage-backend
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 默认值面向本机开发；docker-compose 通过环境变量覆盖（见根目录 docker-compose.yml）
+    # 注意 characterEncoding 要填 Java 字符集名 UTF-8，不能填 MySQL 的 utf8mb4，
+    # 否则驱动抛 UnsupportedEncodingException。服务端字符集由 compose 的
+    # --character-set-server=utf8mb4 指定，驱动会自动协商到 utf8mb4。
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:aimanage}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    # ★ 本机开发时改成你 MySQL 的密码；Docker 下由 compose 注入
+    password: ${DB_PASSWORD:123456}
+
+  # 表结构不自动执行 —— schema.sql 由人工执行一次（见 README）
+  # 原因：schema.sql 含 DROP TABLE，自动执行会在每次启动时清空数据
+  sql:
+    init:
+      mode: never
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: null   # 本端不使用逻辑删除，停用走 status 字段
+
+aimanage:
+  jwt:
+    # 生产环境务必换成随机长串；课设保持此值即可，方便团队共享
+    secret: aimanage-022-course-project-jwt-secret-key-change-me-pls
+    # token 有效期（毫秒）。默认 12 小时
+    expire: 43200000
+  # 首次启动时自动创建的种子管理员
+  seed:
+    admin-username: admin
+    admin-password: "123456"
+    admin-name: 系统管理员
+
+logging:
+  level:
+    com.aimanage: debug

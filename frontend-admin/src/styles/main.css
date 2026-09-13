@@ -1,0 +1,39 @@
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background-color: #f5f7fa;
+}
+
+/* 管理端通用：页面标题 */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0;
+}
+
+.page-desc {
+  font-size: 13px;
+  color: #909399;
+  margin: 4px 0 0;
+}
+
+/* 检索区 */
+.filter-bar {
+  margin-bottom: 16px;
+}

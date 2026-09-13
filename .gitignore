@@ -1,0 +1,38 @@
+# ---- Java / Maven ----
+target/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+# ---- Node ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.iws
+.vscode/
+!.vscode/extensions.json
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- 运行时数据 / 本地配置 ----
+*.log
+logs/
+/data/
+application-local.yml
+.env
+.env.local
+
+# ---- 课程材料，不随代码仓库分发 ----
+第一次课.txt
+第二次课.txt
+1788654448318-实验指导书_实验1_项目启动与规划_4学时.docx
