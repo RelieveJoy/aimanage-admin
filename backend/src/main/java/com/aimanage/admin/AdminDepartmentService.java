@@ -3,7 +3,10 @@ package com.aimanage.admin;
 import com.aimanage.admin.dto.CreateDepartmentRequest;
 import com.aimanage.admin.dto.DepartmentVO;
 import com.aimanage.admin.dto.UpdateDepartmentRequest;
+import com.aimanage.audit.AuditContext;
+import com.aimanage.audit.Auditable;
 import com.aimanage.common.BizException;
+import com.aimanage.entity.AuditLog;
 import com.aimanage.entity.Department;
 import com.aimanage.entity.User;
 import com.aimanage.mapper.DepartmentMapper;
@@ -97,6 +100,7 @@ public class AdminDepartmentService {
 
     // ---------------------------------------------------------------- 新增
 
+    @Auditable(type = AuditLog.TARGET_DEPARTMENT, action = AuditLog.ACTION_CREATE)
     @Transactional
     public DepartmentVO create(CreateDepartmentRequest req) {
         Department parent = resolveParent(req.getParentId());
@@ -106,6 +110,10 @@ public class AdminDepartmentService {
         d.setParentId(parent.getId());
         d.setSort(req.getSort() == null ? 0 : req.getSort());
         departmentMapper.insert(d);
+
+        AuditContext.targetId(d.getId());
+        AuditContext.targetName(d.getName());
+        AuditContext.change("部门", null, d.getName());
 
         return toVO(d, Map.of());
     }
@@ -134,14 +142,18 @@ public class AdminDepartmentService {
 
     // ---------------------------------------------------------------- 修改
 
+    @Auditable(type = AuditLog.TARGET_DEPARTMENT, action = AuditLog.ACTION_UPDATE, targetIdArg = 0)
     @Transactional
     public DepartmentVO update(Long id, UpdateDepartmentRequest req) {
         Department d = requireDepartment(id);
+        AuditContext.targetName(d.getName());
 
-        if (req.getName() != null) {
+        if (req.getName() != null && !req.getName().equals(d.getName())) {
+            AuditContext.change("部门名称", d.getName(), req.getName());
             d.setName(req.getName());
         }
-        if (req.getSort() != null) {
+        if (req.getSort() != null && !req.getSort().equals(d.getSort())) {
+            AuditContext.change("排序", d.getSort(), req.getSort());
             d.setSort(req.getSort());
         }
         departmentMapper.updateById(d);
@@ -150,6 +162,7 @@ public class AdminDepartmentService {
 
     // ---------------------------------------------------------------- 删除
 
+    @Auditable(type = AuditLog.TARGET_DEPARTMENT, action = AuditLog.ACTION_DELETE, targetIdArg = 0)
     @Transactional
     public void delete(Long id) {
         Department d = requireDepartment(id);
@@ -171,6 +184,9 @@ public class AdminDepartmentService {
         }
 
         departmentMapper.deleteById(id);
+
+        AuditContext.targetName(d.getName());
+        AuditContext.change("部门", d.getName(), null);
     }
 
     // ---------------------------------------------------------------- 内部

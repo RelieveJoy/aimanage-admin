@@ -190,20 +190,48 @@ curl http://localhost:8080/api/admin/users -H "Authorization: Bearer <member-tok
 | AD1 | 管理员登录与入口隔离 | ✅ 后端 + 前端 |
 | AD2 | 用户账号管理（建 PM / 建 Member / 启停 / 重置密码） | ✅ 后端 + 前端 |
 | AD3 | 组织架构（部门树 + 成员归属） | ✅ 后端 + 前端 |
+| AD4 | 项目管理（建项目 / 指定 PM / 归档） | ✅ 后端 + 前端 |
+| AD5 | 项目成员与成员变化 | ✅ 后端 + 前端 |
+| AD6 | 全局审计账本检索 | ✅ 后端 + 前端 |
+| — | 审计 AOP 切面（方案 A2 写入侧） | ✅ |
 | — | Docker 一键部署 | ✅ |
 | — | 概览页（统计 + 进度） | ✅ |
 
 ### 待开发
 
-| 编号 | 功能 | Sprint |
+| 编号 | 功能 | 阻塞原因 |
 |---|---|---|
-| AD4 | 项目管理（建项目 / 指定 PM / 归档） | Sprint 2 |
-| AD5 | 项目成员与成员变化 | Sprint 2 |
-| AD7 | 只读观测（看板 / 甘特） | Sprint 2 |
-| AD6 | 全局审计账本检索 | Sprint 3 |
-| AD8 | 加人申请审批 + 通知中心 | Sprint 3 |
+| AD7 | 只读观测（看板 / 甘特） | 依赖业务端提供支持 `readonly` 的组件 |
+| AD8 | 加人申请审批 + 通知中心 | 依赖 PM 端提供「申请加人」入口 |
 
 **侧边菜单里灰色的项就是这些未完成的故事** —— 有意摆出来，让功能边界可见。
+
+---
+
+## 审计账本（方案 A2）
+
+这是整个系统的灵魂：每次写操作自动留痕，记录**操作人、时间、对象、字段、变更前值、变更后值**。
+
+```
+业务写操作 → @Auditable 注解 → AuditAspect 切面 → audit_log 表 → Admin 检索界面
+```
+
+**关键点：写入方是共享后端的基础设施，不属于任何一端。**
+业务端新增写方法时，**加上 `@Auditable` 注解即自动纳入审计**，不必手写记录代码：
+
+```java
+@Auditable(type = AuditLog.TARGET_TASK, action = AuditLog.ACTION_UPDATE, projectIdArg = 0)
+public void updateStatus(Long taskId, String newStatus) {
+    Task old = ...;
+    AuditContext.change("状态", old.getStatus(), newStatus);   // 只补这一行
+    ...
+}
+```
+
+操作人、角色快照、时间、落库、异常隔离全部由切面处理。
+
+> **一条铁律**：审计写入**绝不阻塞业务**。写账本失败只记日志，不让用户的写操作失败。
+> 账本少一条是可接受的降级，因为记日志失败而让业务失败则不可接受。
 
 ---
 
@@ -211,7 +239,7 @@ curl http://localhost:8080/api/admin/users -H "Authorization: Bearer <member-tok
 
 | # | 依赖 | 说明 |
 |---|---|---|
-| 1 | **审计 AOP 切面** | `audit_log` 的**写入方**属共享后端，尚无归属。AD6 完全依赖它 |
+| 1 | **业务端写方法接入 `@Auditable`** | 切面已就位，但业务端的 Service 方法需要加注解才会进账本 |
 | 2 | 只读观测 | 业务端看板/甘特组件需支持 `readonly` 模式 |
 | 3 | 加人申请 | PM 端需提供「申请加人」入口 |
 

@@ -31,6 +31,24 @@ const routes = [
         component: () => import('@/views/Org.vue'),
         meta: { title: '组织架构' },
       },
+      {
+        path: 'projects',
+        name: 'projects',
+        component: () => import('@/views/Projects.vue'),
+        meta: { title: '项目管理' },
+      },
+      {
+        path: 'projects/:id',
+        name: 'project-detail',
+        component: () => import('@/views/ProjectDetail.vue'),
+        meta: { title: '项目详情' },
+      },
+      {
+        path: 'audit',
+        name: 'audit',
+        component: () => import('@/views/Audit.vue'),
+        meta: { title: '审计账本' },
+      },
     ],
   },
   {

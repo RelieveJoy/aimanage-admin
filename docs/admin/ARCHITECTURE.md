@@ -53,13 +53,17 @@ com.aimanage
 ├── auth/                         认证（三端共用）
 │   ├── AuthController.java       POST /api/auth/login | logout | GET /me
 │   └── dto/LoginRequest.java
-├── entity/                       表实体
-│   └── User.java
-├── mapper/
-│   └── UserMapper.java
-└── admin/                        ★ Admin 端专属接口
-    ├── AdminUserController.java  /api/admin/users/**
-    └── AdminUserService.java
+├── audit/                        ★ 审计账本写入侧（方案 A2，共享后端）
+│   ├── Auditable.java            标注需要审计的方法
+│   ├── AuditContext.java         业务方法向切面补充"改了什么"
+│   └── AuditAspect.java          ★ AOP 切面，账本的唯一写入方
+├── entity/  mapper/              表实体与 Mapper
+└── admin/                        ★ Admin 端专属接口（只读审计，不写）
+    ├── AdminUserController.java       /api/admin/users/**
+    ├── AdminDepartmentController.java /api/admin/departments/**
+    ├── AdminProjectController.java    /api/admin/projects/**
+    ├── AdminAuditController.java      /api/admin/audits/**   ← 只读
+    └── AdminAuditService.java         账本读取侧
 ```
 
 **分层原则**：`admin/` 下所有 Controller 的路径必须以 `/api/admin/` 开头——这是拦截器判定"管理端接口"的唯一依据。
@@ -150,10 +154,49 @@ com.aimanage
 
 ---
 
-## 6. 待定
+## 6. 审计账本的数据流（★ 方案 A2）
+
+```
+业务写操作（Admin / PM / Member 的 Service 方法）
+        │  方法上标注 @Auditable(type=..., action=...)
+        ▼
+  AuditAspect  ← @Around 环绕
+        │  1. 清空 AuditContext
+        │  2. pjp.proceed()  执行业务方法
+        │     └─ 方法内部调 AuditContext.change(field, before, after)
+        │        补充"改了什么"（只有业务方法知道）
+        │  3. 读 AuditContext，取操作人 / 角色快照 / 时间
+        │  4. 每个字段写一条 audit_log
+        ▼
+   audit_log 表（只增不改不删）
+        │
+        ▼
+  AdminAuditService（读侧）→ AD5.3 成员变更历史 / AD6 全局检索
+```
+
+### 6.1 为什么分成两半
+
+| 角色 | 负责 |
+|---|---|
+| **切面** | 操作人、角色快照、时间、落库、异常隔离 —— 所有机械的部分 |
+| **业务方法** | 通过 `AuditContext` 一行补充"哪个字段从什么变成什么" |
+
+让切面去反射反推字段变化，会写出很脆的代码；让业务方法全手写，
+又会退化成"每个方法抄一段"的笨办法（方案明确反对）。这是折中。
+
+### 6.2 一条铁律
+
+**审计写入绝不阻塞业务。** `AuditAspect.writeLog()` 吞掉所有异常并记 error 日志。
+
+理由：账本少一条记录是可接受的降级；因为记日志失败而让用户的写操作失败，
+是不可接受的。这个取舍是有意的，不是疏忽。
+
+---
+
+## 7. 待定
 
 | # | 事项 |
 |---|---|
-| 1 | A2 审计 AOP 切面由谁实现（阻塞 AD6） |
-| 2 | 业务端看板/甘特组件是否支持 `readonly` 模式（阻塞 AD7） |
-| 3 | PM 端"申请加人"入口的接口路径（阻塞 AD8.1） |
+| 1 | 业务端看板/甘特组件是否支持 `readonly` 模式（阻塞 AD7） |
+| 2 | PM 端"申请加人"入口的接口路径（阻塞 AD8.1） |
+| 3 | 业务端写方法接入 `@Auditable` —— 加注解即可，否则业务变更不进账本 |

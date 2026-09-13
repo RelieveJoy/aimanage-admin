@@ -2,9 +2,12 @@ package com.aimanage.admin;
 
 import com.aimanage.admin.dto.CreateUserRequest;
 import com.aimanage.admin.dto.UpdateUserRequest;
+import com.aimanage.audit.AuditContext;
+import com.aimanage.audit.Auditable;
 import com.aimanage.auth.dto.UserVO;
 import com.aimanage.common.BizException;
 import com.aimanage.common.PageResult;
+import com.aimanage.entity.AuditLog;
 import com.aimanage.entity.Department;
 import com.aimanage.entity.User;
 import com.aimanage.mapper.DepartmentMapper;
@@ -105,6 +108,7 @@ public class AdminUserService {
 
     // ---------------------------------------------------------------- 新增
 
+    @Auditable(type = AuditLog.TARGET_USER, action = AuditLog.ACTION_CREATE)
     @Transactional
     public UserVO create(CreateUserRequest req) {
         if (!ASSIGNABLE_ROLES.contains(req.getRole())) {
@@ -127,27 +131,54 @@ public class AdminUserService {
         u.setTokenVersion(0);
         userMapper.insert(u);
 
+        AuditContext.targetId(u.getId());
+        AuditContext.targetName(u.getName());
+        AuditContext.change("账号", null, u.getName());
+        AuditContext.change("角色", null, roleText(u.getRole()));
+
         return UserVO.from(u);
+    }
+
+    private String roleText(String role) {
+        if (RoleEnum.PM.name().equals(role)) {
+            return "项目经理";
+        }
+        if (RoleEnum.MEMBER.name().equals(role)) {
+            return "团队成员";
+        }
+        return role;
+    }
+
+    private String statusText(Integer status) {
+        if (status == null) {
+            return null;
+        }
+        return status == 1 ? "启用" : "停用";
     }
 
     // ---------------------------------------------------------------- 修改
 
+    @Auditable(type = AuditLog.TARGET_USER, action = AuditLog.ACTION_UPDATE, targetIdArg = 0)
     @Transactional
     public UserVO update(Long id, UpdateUserRequest req) {
         User u = requireUser(id);
+        AuditContext.targetName(u.getName());
 
-        if (req.getName() != null) {
+        if (req.getName() != null && !req.getName().equals(u.getName())) {
+            AuditContext.change("姓名", u.getName(), req.getName());
             u.setName(req.getName());
         }
 
-        if (req.getRole() != null) {
+        if (req.getRole() != null && !req.getRole().equals(u.getRole())) {
             if (!ASSIGNABLE_ROLES.contains(req.getRole())) {
                 throw BizException.badRequest("角色只能是 PM 或 MEMBER");
             }
+            AuditContext.change("角色", roleText(u.getRole()), roleText(req.getRole()));
             u.setRole(req.getRole());
         }
 
         if (req.getDeptId() != null) {
+            String before = deptNameOf(u.getDeptId());
             if (req.getDeptId() == 0L) {
                 // 约定 deptId = 0 表示"不分配"。
                 // 不能只 setDeptId(null)：MyBatis-Plus 的 updateById 默认忽略 null 字段，
@@ -156,21 +187,34 @@ public class AdminUserService {
                         .eq(User::getId, u.getId())
                         .set(User::getDeptId, null));
                 u.setDeptId(null);
+                AuditContext.change("部门", before, null);
             } else {
                 requireDeptExists(req.getDeptId());
+                if (!req.getDeptId().equals(u.getDeptId())) {
+                    AuditContext.change("部门", before, deptNameOf(req.getDeptId()));
+                }
                 u.setDeptId(req.getDeptId());
             }
         }
 
-        if (req.getStatus() != null) {
+        if (req.getStatus() != null && !req.getStatus().equals(u.getStatus())) {
             if (req.getStatus() == 0) {
                 guardDisable(u);
             }
+            AuditContext.change("账号状态", statusText(u.getStatus()), statusText(req.getStatus()));
             u.setStatus(req.getStatus());
         }
 
         userMapper.updateById(u);
         return UserVO.from(u);
+    }
+
+    private String deptNameOf(Long deptId) {
+        if (deptId == null) {
+            return null;
+        }
+        Department d = departmentMapper.selectById(deptId);
+        return d == null ? null : d.getName();
     }
 
     /**
@@ -196,12 +240,18 @@ public class AdminUserService {
      * 重置密码，同时自增 {@code token_version}，
      * 使该用户已签发的 token 在下次请求时失效。
      */
+    @Auditable(type = AuditLog.TARGET_USER, action = AuditLog.ACTION_UPDATE, targetIdArg = 0)
     @Transactional
     public void resetPassword(Long id, String newPassword) {
         User u = requireUser(id);
         u.setPassword(passwordEncoder.encode(newPassword));
         u.setTokenVersion(u.getTokenVersion() == null ? 1 : u.getTokenVersion() + 1);
         userMapper.updateById(u);
+
+        // 审计里绝不能记密码本身，只记"发生过重置"这件事
+        AuditContext.targetName(u.getName());
+        AuditContext.change("密码", null, "已被重置");
+        AuditContext.remark("管理员重置密码，该用户登录状态已失效");
     }
 
     // ---------------------------------------------------------------- 内部

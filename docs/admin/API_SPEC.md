@@ -201,33 +201,76 @@ Authorization: Bearer <token>
 
 ---
 
-## 4. 项目管理（Sprint 2 · Must）— 草案
+## 4. 项目管理（Sprint 2 · Must）✅ 已实现
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/admin/projects` | 全公司项目；支持 `keyword` / `status` / `page` / `size`；响应含 `pmName`、`memberCount` |
-| POST | `/api/admin/projects` | `{name, code, pmId, description}` |
-| PATCH | `/api/admin/projects/{id}` | 改名 / 换 PM / 归档 |
-| GET | `/api/admin/projects/{id}` | 项目详情，含 PM 与成员列表 |
+| GET | `/api/admin/projects` | 全公司项目；`keyword`（名称或编号）/ `status` / `page` / `size` |
+| GET | `/api/admin/projects/{id}` | 项目详情 |
+| POST | `/api/admin/projects` | `{name, description, pmId}` |
+| PATCH | `/api/admin/projects/{id}` | 改名 / 改描述 / 换 PM / 归档 |
 
-**约束**：`pmId` 必须是 `role=PM` 且 `status=1` 的用户，否则 `400`。
+响应元素：
+
+```json
+{ "id": 1, "name": "爱管理项目", "code": "PRJ-001",
+  "description": "第三代项目管理工具",
+  "pmId": 3, "pmName": "张三",
+  "status": 1, "memberCount": 2,
+  "createdAt": "2026-09-13 15:43:58" }
+```
+
+**`code` 由后端自动生成**，格式 `PRJ-001`（取已有最大编号 +1），前端不传。
+
+**约束**
+| 场景 | code | msg |
+|---|---|---|
+| `pmId` 对应用户不是 PM 角色 | `400` | "项目经理必须是「项目经理」角色的用户" |
+| `pmId` 对应用户已停用 | `400` | "该账号已停用，不能担任项目经理" |
+| 项目不存在 | `404` | "项目不存在" |
+
+**排序**：进行中优先，同状态内按创建时间倒序。
+
+**归档语义**（`status: 0`）：数据全部保留，仅从默认视图隐藏；成员端不再看到该项目。
 
 ---
 
-## 5. 项目成员（Sprint 2 · Must）— 草案
+## 5. 项目成员（Sprint 2 · Must）✅ 已实现
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/admin/projects/{id}/members` | 成员列表 + 各自 `roleInProject` |
+| GET | `/api/admin/projects/{id}/members` | 成员列表 |
 | POST | `/api/admin/projects/{id}/members` | `{userId}` — Admin 直接加人，无需审批 |
 | DELETE | `/api/admin/projects/{id}/members/{userId}` | 移出项目 |
-| GET | `/api/admin/projects/{id}/member-history` | **成员变更历史**（谁、何时、进/出） |
+| GET | `/api/admin/projects/{id}/member-history` | **成员变更历史**（AD5.3） |
 
-> `member-history` 不新建埋点表，直接查 `audit_log` 中 `target_type='PROJECT_MEMBER'` 的记录。
+成员元素：
+
+```json
+{ "userId": 2, "username": "test_member", "name": "测试成员",
+  "systemRole": "MEMBER",        // 系统级角色
+  "roleInProject": "MEMBER",     // 项目内角色
+  "deptName": "研发部",
+  "status": 1, "joinedAt": "2026-09-13 15:44:00" }
+```
+
+**约束**
+| 场景 | code | msg |
+|---|---|---|
+| 用户不存在 | `404` | "用户不存在" |
+| 用户已停用 | `400` | "该账号已停用，无法加入项目" |
+| 用户已在项目中 | `409` | "该用户已在项目中" |
+| 移出项目经理本人 | `409` | "不能把项目经理移出项目，请先更换项目经理" |
+
+**两个行为约定**
+1. **新建项目时 PM 自动成为项目成员**（`roleInProject = PM`），否则成员列表里看不到 PM 自己。
+2. **更换 PM 时，原 PM 降为普通成员**而非被踢出 —— 他可能仍在项目里干活。
+
+**`member-history` 不查单独的埋点表**，直接读 `audit_log` 中 `target_type = 'PROJECT_MEMBER'` 的记录。响应结构同 §7。
 
 ---
 
-## 6. 只读观测（Sprint 2 · Must）— 草案
+## 6. 只读观测（Sprint 2 · Must）⏸ 未实现
 
 Admin 端**不新增接口**，复用业务端既有 GET：
 
@@ -238,9 +281,11 @@ Admin 端**不新增接口**，复用业务端既有 GET：
 
 **约束**：业务端所有写接口（POST/PATCH/DELETE）必须对 `role=ADMIN` 返回 `403`。
 
+> ⏸ **阻塞中**：依赖业务端提供支持 `readonly` 的看板/甘特组件。
+
 ---
 
-## 7. 审计账本检索（Sprint 3 · Must）— 草案
+## 7. 审计账本检索（Sprint 3 · Must）✅ 已实现
 
 ### GET `/api/admin/audits`
 
@@ -248,31 +293,48 @@ Admin 端**不新增接口**，复用业务端既有 GET：
 |---|---|---|
 | projectId | long | 按项目 |
 | operatorId | long | 按操作人 |
-| targetType | string | `TASK` / `REQUIREMENT` / `PROJECT` / `PROJECT_MEMBER` |
-| field | string | 字段名，如 `status` |
-| startTime / endTime | string | `yyyy-MM-dd HH:mm:ss` |
-| keyword | string | 匹配 `target_name` / `remark` / 前后值 |
+| targetType | string | `PROJECT` / `PROJECT_MEMBER` / `USER` / `DEPARTMENT` |
+| field | string | 字段名，如 `角色`、`项目名称` |
+| startTime / endTime | string | `yyyy-MM-dd` 或 `yyyy-MM-dd HH:mm:ss` |
+| keyword | string | 模糊匹配 `targetName` / `remark` / 前后值 |
 | page / size | int | 默认 1 / 20 |
 
-响应 `records[]` 元素：
+响应元素：
+
 ```json
 { "id": 9001,
-  "operatorId": 2, "operatorName": "张三", "operatorRole": "PM",
-  "projectId": 5, "projectName": "爱管理项目",
-  "targetType": "REQUIREMENT", "targetId": 12, "targetName": "需求#12",
-  "field": "status",
-  "beforeValue": "已确认", "afterValue": "待评审",
-  "remark": "客户方王总电话确认",
-  "createdAt": "2026-08-12 14:32:10" }
+  "operatorId": 1, "operatorName": "系统管理员", "operatorRole": "ADMIN",
+  "projectId": 1, "projectName": "爱管理项目",
+  "targetType": "PROJECT_MEMBER", "targetId": 2, "targetName": "测试成员",
+  "field": "项目成员",
+  "beforeValue": null, "afterValue": "测试成员",
+  "action": "CREATE",
+  "remark": "加入项目「爱管理项目」",
+  "createdAt": "2026-09-13 15:44:00" }
 ```
 
+> **时间边界处理**：`endTime` 只给日期（如 `2026-09-13`）时自动补到当天 `23:59:59`，
+> 否则用户会困惑"今天发生的变更怎么筛不出来"。
+
 ### GET `/api/admin/audits/{id}`
-单条详情，字段同上，另附 `beforeSnapshot` / `afterSnapshot`（整对象 JSON，用于详情抽屉对比）。
+单条详情，结构同上。
 
-### GET `/api/admin/audits/export`（Should）
-同检索参数，返回 `text/csv`。
+> **只读硬约束**：`audit_log` 未暴露任何写接口，Admin 亦不可修改或删除，对应方案的"不可篡改"。
 
-> **只读硬约束**：`audit_log` 无任何写接口暴露，Admin 亦不可修改或删除。
+---
+
+## 8. 审计账本的写入方（共享后端，不属于本端）
+
+`audit_log` 的数据**不由 Admin 端写入**，而由审计切面在业务写操作发生时自动记录：
+
+| 组件 | 位置 | 职责 |
+|---|---|---|
+| `@Auditable` | `com.aimanage.audit` | 标注需要审计的方法 |
+| `AuditContext` | 同上 | 业务方法向切面补充"改了什么" |
+| `AuditAspect` | 同上 | 统一记录操作人、时间、落库，异常不阻塞业务 |
+
+业务端新增写方法时，加上 `@Auditable` 注解即可自动纳入审计。
+详见 `docs/admin/ARCHITECTURE.md` §7。
 
 ---
 

@@ -38,6 +38,15 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!--
+          AOP：审计账本（方案 A2）靠切面自动留痕，
+          见 com.aimanage.audit.AuditAspect
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- MyBatis-Plus：管理端 CRUD 密集，省模板代码 -->
         <dependency>
             <groupId>com.baomidou</groupId>
