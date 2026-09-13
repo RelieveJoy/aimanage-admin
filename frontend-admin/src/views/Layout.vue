@@ -95,7 +95,7 @@ const auth = useAuthStore()
 const menus = [
   { name: 'dashboard', path: '/dashboard', title: '概览', icon: Odometer, disabled: false },
   { name: 'users', path: '/users', title: '用户管理', icon: User, disabled: false },
-  { name: 'org', path: '/org', title: '组织架构', icon: OfficeBuilding, disabled: true },
+  { name: 'org', path: '/org', title: '组织架构', icon: OfficeBuilding, disabled: false },
   { name: 'projects', path: '/projects', title: '项目管理', icon: Folder, disabled: true },
   { name: 'audit', path: '/audit', title: '审计账本', icon: Document, disabled: true },
   { name: 'observe', path: '/observe', title: '只读观测', icon: View, disabled: true },

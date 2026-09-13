@@ -18,6 +18,10 @@ public class UpdateUserRequest {
     /** PM / MEMBER；改为 ADMIN 会被拒绝 */
     private String role;
 
+    /**
+     * 部门 ID。<b>传 0 表示"不分配"</b>（因为 PATCH 语义下 null 是"不修改"，
+     * 需要一个哨兵值来表达"清空"）。
+     */
     private Long deptId;
 
     /** 1 启用 / 0 停用 */

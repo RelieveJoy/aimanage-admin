@@ -29,5 +29,6 @@ public class CreateUserRequest {
     @NotBlank(message = "请选择角色")
     private String role;
 
+    /** 部门 ID，可为 null 或 0（都表示不分配） */
     private Long deptId;
 }

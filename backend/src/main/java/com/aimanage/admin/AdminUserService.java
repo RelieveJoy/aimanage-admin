@@ -5,7 +5,9 @@ import com.aimanage.admin.dto.UpdateUserRequest;
 import com.aimanage.auth.dto.UserVO;
 import com.aimanage.common.BizException;
 import com.aimanage.common.PageResult;
+import com.aimanage.entity.Department;
 import com.aimanage.entity.User;
+import com.aimanage.mapper.DepartmentMapper;
 import com.aimanage.mapper.UserMapper;
 import com.aimanage.security.RoleEnum;
 import com.aimanage.security.UserContext;
@@ -18,8 +20,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 用户管理业务逻辑（AD2）。
@@ -36,6 +42,7 @@ public class AdminUserService {
             Set.of(RoleEnum.PM.name(), RoleEnum.MEMBER.name());
 
     private final UserMapper userMapper;
+    private final DepartmentMapper departmentMapper;
     private final PasswordEncoder passwordEncoder;
 
     // ---------------------------------------------------------------- 查询
@@ -63,11 +70,37 @@ public class AdminUserService {
 
         Page<User> result = userMapper.selectPage(new Page<>(page, size), w);
         List<UserVO> records = result.getRecords().stream().map(UserVO::from).toList();
+        fillDeptName(records);
         return new PageResult<>(result.getTotal(), page, size, records);
     }
 
     public UserVO detail(Long id) {
-        return UserVO.from(requireUser(id));
+        UserVO vo = UserVO.from(requireUser(id));
+        fillDeptName(List.of(vo));
+        return vo;
+    }
+
+    /**
+     * 批量回填部门名称。
+     * 一次查出涉及到的部门做映射，避免在循环里逐条 selectById。
+     */
+    private void fillDeptName(Collection<UserVO> vos) {
+        List<Long> deptIds = vos.stream()
+                .map(UserVO::getDeptId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (deptIds.isEmpty()) {
+            return;
+        }
+
+        Map<Long, String> nameById = departmentMapper
+                .selectBatchIds(deptIds)
+                .stream()
+                .collect(Collectors.toMap(Department::getId, Department::getName,
+                        (a, b) -> a));
+
+        vos.forEach(vo -> vo.setDeptName(nameById.get(vo.getDeptId())));
     }
 
     // ---------------------------------------------------------------- 新增
@@ -82,13 +115,14 @@ public class AdminUserService {
         if (exists != null && exists > 0) {
             throw BizException.conflict("用户名已存在");
         }
+        Long deptId = normalizeDeptId(req.getDeptId());
 
         User u = new User();
         u.setUsername(req.getUsername());
         u.setName(req.getName());
         u.setPassword(passwordEncoder.encode(req.getPassword()));
         u.setRole(req.getRole());
-        u.setDeptId(req.getDeptId());
+        u.setDeptId(deptId);
         u.setStatus(1);
         u.setTokenVersion(0);
         userMapper.insert(u);
@@ -114,7 +148,18 @@ public class AdminUserService {
         }
 
         if (req.getDeptId() != null) {
-            u.setDeptId(req.getDeptId());
+            if (req.getDeptId() == 0L) {
+                // 约定 deptId = 0 表示"不分配"。
+                // 不能只 setDeptId(null)：MyBatis-Plus 的 updateById 默认忽略 null 字段，
+                // 置空必须走 UpdateWrapper 显式 set。
+                userMapper.update(null, Wrappers.<User>lambdaUpdate()
+                        .eq(User::getId, u.getId())
+                        .set(User::getDeptId, null));
+                u.setDeptId(null);
+            } else {
+                requireDeptExists(req.getDeptId());
+                u.setDeptId(req.getDeptId());
+            }
         }
 
         if (req.getStatus() != null) {
@@ -167,5 +212,26 @@ public class AdminUserService {
             throw BizException.notFound("用户不存在");
         }
         return u;
+    }
+
+    /**
+     * 归一化 deptId：0 与 null 都表示"不分配"，其余值必须真实存在。
+     */
+    private Long normalizeDeptId(Long deptId) {
+        if (deptId == null || deptId == 0L) {
+            return null;
+        }
+        requireDeptExists(deptId);
+        return deptId;
+    }
+
+    /** deptId 允许为 null（未分配部门），但填了就必须真实存在 */
+    private void requireDeptExists(Long deptId) {
+        if (deptId == null) {
+            return;
+        }
+        if (departmentMapper.selectById(deptId) == null) {
+            throw BizException.badRequest("所选部门不存在");
+        }
     }
 }

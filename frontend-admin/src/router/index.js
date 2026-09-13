@@ -25,6 +25,12 @@ const routes = [
         component: () => import('@/views/Users.vue'),
         meta: { title: '用户管理' },
       },
+      {
+        path: 'org',
+        name: 'org',
+        component: () => import('@/views/Org.vue'),
+        meta: { title: '组织架构' },
+      },
     ],
   },
   {

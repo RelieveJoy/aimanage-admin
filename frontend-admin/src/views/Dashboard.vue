@@ -92,7 +92,7 @@ async function loadCounts() {
 const stories = [
   { id: 'AD1', name: '管理员登录与入口隔离', sprint: 'Sprint 1', done: true },
   { id: 'AD2', name: '用户账号管理', sprint: 'Sprint 1', done: true },
-  { id: 'AD3', name: '组织架构', sprint: 'Sprint 1', done: false },
+  { id: 'AD3', name: '组织架构', sprint: 'Sprint 1', done: true },
   { id: 'AD4', name: '项目管理', sprint: 'Sprint 2', done: false },
   { id: 'AD5', name: '项目成员与成员变化', sprint: 'Sprint 2', done: false },
   { id: 'AD7', name: '只读观测（看板 / 甘特）', sprint: 'Sprint 2', done: false },

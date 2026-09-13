@@ -41,8 +41,10 @@ aimanage:
     secret: aimanage-022-course-project-jwt-secret-key-change-me-pls
     # token 有效期（毫秒）。默认 12 小时
     expire: 43200000
-  # 首次启动时自动创建的种子管理员
+  # 首次启动时自动创建的种子数据
   seed:
+    # 组织架构树的根节点（单企业形态，根就是本公司）
+    company-name: 022 科技有限公司
     admin-username: admin
     admin-password: "123456"
     admin-name: 系统管理员

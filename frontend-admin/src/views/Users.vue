@@ -35,6 +35,22 @@
           </el-select>
         </el-form-item>
 
+        <el-form-item label="部门">
+          <el-select
+            v-model="query.deptId"
+            placeholder="全部"
+            clearable
+            style="width: 150px"
+          >
+            <el-option
+              v-for="d in deptOptions"
+              :key="d.id"
+              :label="d.name"
+              :value="d.id"
+            />
+          </el-select>
+        </el-form-item>
+
         <el-form-item label="状态">
           <el-select
             v-model="query.status"
@@ -144,6 +160,19 @@
           </el-radio-group>
         </el-form-item>
 
+        <el-form-item label="部门" prop="deptId">
+          <el-select v-model="form.deptId" style="width: 100%">
+            <!-- 0 是"不分配"的哨兵值，后端据此清空部门 -->
+            <el-option label="不分配" :value="0" />
+            <el-option
+              v-for="d in deptOptions"
+              :key="d.id"
+              :label="d.name"
+              :value="d.id"
+            />
+          </el-select>
+        </el-form-item>
+
         <el-alert
           v-if="!dialog.isEdit"
           type="info"
@@ -192,6 +221,7 @@ import {
   updateUser,
   resetPassword,
 } from '@/api/admin-user'
+import { fetchDepartmentTree } from '@/api/admin-department'
 
 const loading = ref(false)
 const rows = ref([])
@@ -200,10 +230,23 @@ const total = ref(0)
 const query = reactive({
   keyword: '',
   role: '',
+  deptId: '',
   status: '',
   page: 1,
   size: 20,
 })
+
+/** 扁平化的部门列表（不含公司根节点），供筛选与表单使用 */
+const deptOptions = ref([])
+
+async function loadDepartments() {
+  try {
+    const tree = await fetchDepartmentTree()
+    deptOptions.value = tree[0]?.children ?? []
+  } catch {
+    // 拦截器已提示
+  }
+}
 
 /* ---------------- 列表 ---------------- */
 async function load() {
@@ -213,6 +256,7 @@ async function load() {
     const params = { page: query.page, size: query.size }
     if (query.keyword) params.keyword = query.keyword
     if (query.role) params.role = query.role
+    if (query.deptId) params.deptId = query.deptId
     if (query.status !== '' && query.status !== null) params.status = query.status
 
     const data = await fetchUsers(params)
@@ -233,6 +277,7 @@ function onSearch() {
 function onReset() {
   query.keyword = ''
   query.role = ''
+  query.deptId = ''
   query.status = ''
   onSearch()
 }
@@ -255,7 +300,7 @@ async function onToggleStatus(row, checked) {
 const formRef = ref()
 const dialog = reactive({ visible: false, isEdit: false, saving: false, id: null })
 
-const form = reactive({ username: '', name: '', password: '', role: 'MEMBER' })
+const form = reactive({ username: '', name: '', password: '', role: 'MEMBER', deptId: 0 })
 
 const formRules = {
   username: [
@@ -272,7 +317,7 @@ const formRules = {
 
 function resetForm() {
   formRef.value?.clearValidate()
-  Object.assign(form, { username: '', name: '', password: '', role: 'MEMBER' })
+  Object.assign(form, { username: '', name: '', password: '', role: 'MEMBER', deptId: 0 })
   dialog.id = null
 }
 
@@ -289,6 +334,7 @@ function openEdit(row) {
     name: row.name,
     password: '',
     role: row.role,
+    deptId: row.deptId ?? 0,
   })
   dialog.visible = true
 }
@@ -300,7 +346,11 @@ async function onSubmit() {
   dialog.saving = true
   try {
     if (dialog.isEdit) {
-      await updateUser(dialog.id, { name: form.name, role: form.role })
+      await updateUser(dialog.id, {
+        name: form.name,
+        role: form.role,
+        deptId: form.deptId,
+      })
       ElMessage.success('已保存')
     } else {
       await createUser({
@@ -308,6 +358,7 @@ async function onSubmit() {
         name: form.name,
         password: form.password,
         role: form.role,
+        deptId: form.deptId,
       })
       ElMessage.success('创建成功')
     }
@@ -354,7 +405,10 @@ async function onResetSubmit() {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  await loadDepartments()
+  load()
+})
 </script>
 
 <style scoped>

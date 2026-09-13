@@ -138,30 +138,66 @@ Authorization: Bearer <token>
 
 ## 3. 组织架构（Sprint 1 · Must）
 
+> **树的形状是两层的**：公司（根，`parentId = 0`）→ 部门。
+> 在部门下再建子部门会返回 `400`——单企业课设场景下三层无真实收益，有意不做。
+
 ### GET `/api/admin/departments`
-返回部门树。根节点为公司本身（`parent_id = 0`）。
+返回完整部门树。
 
 ```json
 { "code": 0, "msg": "ok", "data": [
   { "id": 1, "name": "022 科技有限公司", "parentId": 0, "sort": 0,
-    "children": [ { "id": 10, "name": "研发部", "parentId": 1, "children": [] } ] } ] }
+    "memberCount": 0, "isRoot": true,
+    "children": [
+      { "id": 2, "name": "研发部", "parentId": 1, "sort": 1,
+        "memberCount": 1, "isRoot": false, "children": [] }
+    ] } ] }
 ```
+
+`memberCount` 是该部门**直属**人数（树只有两层，无子部门可叠加）。
 
 ### POST `/api/admin/departments`
 ```json
-{ "name": "测试部", "parentId": 1, "sort": 1 }
+{ "name": "测试部", "parentId": 1, "sort": 2 }
 ```
+
+`parentId` 省略时默认挂到公司根节点。
+
+**异常**
+| 场景 | code | msg |
+|---|---|---|
+| `parentId` 指向的不是公司根节点 | `400` | "组织架构只支持两层，不能在部门下再建子部门" |
+| `parentId` 不存在 | `404` | "上级部门不存在" |
 
 ### PATCH `/api/admin/departments/{id}`
-可改 `name` / `sort`。
+可改 `name` / `sort`。**不支持改 `parentId`** —— 拖拽改层级属过度设计。
 
 ### DELETE `/api/admin/departments/{id}`
-**异常**：部门下仍有成员或子部门 → `409` "该部门下仍有成员，无法删除"。
 
-### PUT `/api/admin/users/{userId}/department`
+**异常**
+| 场景 | code | msg |
+|---|---|---|
+| 删除公司根节点 | `409` | "公司根节点不能删除" |
+| 部门下有子部门 | `409` | "该部门下仍有子部门，无法删除" |
+| 部门下有成员 | `409` | "该部门下仍有成员，无法删除" |
+
+### 调整成员部门
+复用 `PATCH /api/admin/users/{id}`，传 `deptId`：
+
 ```json
-{ "deptId": 10 }
+{ "deptId": 2 }
 ```
+
+> ⚠️ **`deptId = 0` 表示"不分配"（清空部门）。**
+> 因为 PATCH 语义下 `null` 代表"不修改"，需要一个哨兵值来表达"清空"。
+> 实现上不能只 `setDeptId(null)` —— MyBatis-Plus 的 `updateById` 默认忽略 null 字段，
+> 置空必须走 `UpdateWrapper` 显式 `set`。
+
+| 传入值 | 效果 |
+|---|---|
+| 省略 `deptId` | 不修改部门 |
+| `deptId: 0` | 清空部门（变为"未分配"） |
+| `deptId: <真实 ID>` | 调整到该部门；不存在则 `400` |
 
 ---
 

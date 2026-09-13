@@ -189,6 +189,7 @@ curl http://localhost:8080/api/admin/users -H "Authorization: Bearer <member-tok
 |---|---|---|
 | AD1 | 管理员登录与入口隔离 | ✅ 后端 + 前端 |
 | AD2 | 用户账号管理（建 PM / 建 Member / 启停 / 重置密码） | ✅ 后端 + 前端 |
+| AD3 | 组织架构（部门树 + 成员归属） | ✅ 后端 + 前端 |
 | — | Docker 一键部署 | ✅ |
 | — | 概览页（统计 + 进度） | ✅ |
 
@@ -196,7 +197,6 @@ curl http://localhost:8080/api/admin/users -H "Authorization: Bearer <member-tok
 
 | 编号 | 功能 | Sprint |
 |---|---|---|
-| AD3 | 组织架构（部门树 + 成员归属） | Sprint 1 |
 | AD4 | 项目管理（建项目 / 指定 PM / 归档） | Sprint 2 |
 | AD5 | 项目成员与成员变化 | Sprint 2 |
 | AD7 | 只读观测（看板 / 甘特） | Sprint 2 |
@@ -235,5 +235,6 @@ curl http://localhost:8080/api/admin/users -H "Authorization: Bearer <member-tok
 | `project name must not be empty` | 目录名是中文，Compose 推导不出项目名。已在 `docker-compose.yml` 里用 `name: aimanage` 固定 |
 | `Unsupported character encoding 'utf8mb4'` | JDBC 的 `characterEncoding` 要填 Java 字符集名 `UTF-8`，不是 MySQL 的 `utf8mb4` |
 | 3306 端口被占 | 宿主机已有本机 MySQL。容器映射到 **3307**，连容器数据库请用 3307 |
+| 成员"取消部门"不生效 | `deptId` 传 `0` 表示清空，不能用 `null`（PATCH 里 null 是"不修改"）。详见 API_SPEC §3 |
 | 前端页面空白 / 刷新子页 404 | nginx 已配 `try_files ... /index.html` 回落；若本地开发请确认 vite 的 history 模式配置 |
 | 拉基础镜像失败 | 网络抖动，重试 `docker compose up -d --build` 即可 |
